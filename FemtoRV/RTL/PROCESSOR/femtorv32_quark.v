@@ -90,6 +90,10 @@ module FemtoRV32(
 
    wire isALU = isALUimm | isALUreg;
 
+ // basic CSRs
+  wire [11:0] csrnum = instr[31:20];
+  wire [31:0] csrval;
+
    /***************************************************************************/
    // The register file.
    /***************************************************************************/
@@ -232,7 +236,7 @@ module FemtoRV32(
    /***************************************************************************/
 
    wire [31:0] writeBackData  =
-      (isSYSTEM            ? cycles     : 32'b0) |  // SYSTEM
+      (isSYSTEM            ? csrval     : 32'b0) |  // SYSTEM
       (isLUI               ? Uimm       : 32'b0) |  // LUI
       (isALU               ? aluOut     : 32'b0) |  // ALUreg, ALUimm
       (isAUIPC             ? PCplusImm  : 32'b0) |  // AUIPC
@@ -383,18 +387,27 @@ module FemtoRV32(
 
 `ifdef NRV_COUNTER_WIDTH
    reg [`NRV_COUNTER_WIDTH-1:0]  cycles;
+   reg [`NRV_COUNTER_WIDTH-1:0]  instret;
 `else
    reg [31:0]  cycles;
+   reg [31:0]  instret;
 `endif
-   always @(posedge clk) cycles <= cycles + 1;
-
-`ifdef BENCH
-   initial begin
-      cycles = 0;
-      aluShamt = 0;
-      registerFile[0] = 0;
+   always @(posedge clk)
+   begin
+      if (~reset) begin
+         cycles <= 0;
+         instret <= 0;
+      end
+      else begin
+         cycles <= cycles + 1;
+         if (state[EXECUTE_bit])
+			instret <= instret + 1;
+      end
    end
-`endif
+
+assign csrval = csrnum == 12'hC00 ? cycles
+              : csrnum == 12'hC02 ? instret
+              : 31'h00;
 
 endmodule
 
